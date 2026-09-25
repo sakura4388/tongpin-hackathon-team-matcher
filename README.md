@@ -11,7 +11,7 @@
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-local.txt
 python app.py
 ```
 
@@ -55,6 +55,16 @@ python app.py
 - 数据：SQLite，保存用户、项目、申请、成员关系和文字消息。已有数据库启动时会自动建好新增的消息表。
 - 密码：Werkzeug 哈希，不保存明文密码。
 
+## Cloudflare 部署
+
+线上地址：[同频：黑客松组队空间](https://tongpin-hackathon-team-matcher.cjf0423706.workers.dev/)。项目部署在 Cloudflare Workers，页面静态文件由 Workers Assets 提供，Flask 接口运行在 Python Worker，线上数据保存在 Cloudflare D1。
+
+如需重新部署，先安装 Node.js 和 uv，再用 `uv run pywrangler login` 登录 Cloudflare。
+
+首次配置 D1 后，执行 `uv run pywrangler d1 migrations apply tongpin-hackathon-team-matcher-db --remote` 应用数据表，再执行 `uv run pywrangler secret put APP_SECRET_KEY` 设置随机会话密钥，最后执行 `uv run pywrangler deploy` 发布。每个 Cloudflare 账号的 D1 数据库 ID 不同，需在 `wrangler.jsonc` 中填入自己的 ID。
+
+线上数据库与本机 SQLite 相互独立；部署不会上传本机用户资料或演示数据。
+
 匹配指数由 Python 在服务器计算：所需技能命中率最多 60 分，项目方向命中率最多 25 分，投入时间最多 15 分。页面同时展示三个分项和命中的标签。资料不完整时不显示分数。这个指数帮助发现共同点，不能代替面对面的交流。
 
 浏览器每 2.5 秒请求一次 `/api/state`。正在输入名片、项目或登录表单时，页面不会因为自动同步而重画表单；提交后立即读取最新数据。申请与接受操作在 SQLite 写事务中再次检查状态和队伍人数，避免重复申请或超员。
@@ -73,4 +83,3 @@ python app.py
 ## 遇到的问题与解决方式
 
 前端原型最初把数据保存在浏览器，两个账号无法共享状态。现在所有操作都写入服务器的 SQLite 数据库，页面定期读取最新状态。另一个问题是自动刷新可能清空正在输入的内容，因此编辑表单期间只更新内存数据，保留表单；提交后再刷新页面内容。
-

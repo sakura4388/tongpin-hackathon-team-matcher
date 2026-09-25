@@ -4,7 +4,7 @@ import os
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db
+from app import app, db, init_db
 
 
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "Demo12345!")
@@ -25,6 +25,7 @@ def main():
     if len(DEMO_PASSWORD) < 8:
         raise ValueError("演示密码至少需要 8 位。")
     with app.app_context():
+        init_db()
         connection = db()
         connection.execute("BEGIN IMMEDIATE")
         try:
