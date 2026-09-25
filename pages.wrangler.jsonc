@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tongpin-team-matcher",
+  "compatibility_date": "2026-09-25",
+  "pages_build_output_dir": "./web",
+  "services": [
+    {
+      "binding": "API",
+      "service": "tongpin-hackathon-team-matcher",
+      "environment": "production"
+    }
+  ]
+}

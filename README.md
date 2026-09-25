@@ -57,11 +57,17 @@ python app.py
 
 ## Cloudflare 部署
 
-线上地址：[同频：黑客松组队空间](https://tongpin-hackathon-team-matcher.cjf0423706.workers.dev/)。项目部署在 Cloudflare Workers，页面静态文件由 Workers Assets 提供，Flask 接口运行在 Python Worker，线上数据保存在 Cloudflare D1。
+线上地址：[同频：黑客松组队空间](https://tongpin-team-matcher.pages.dev/)。网页由 Cloudflare Pages 提供；`web/_worker.js` 将 `/api/*` 请求通过 Service Binding 转给 Python Worker，并把原有 `/web/*` 静态资源路径映射到 Pages 文件。Flask 接口仍运行在 Cloudflare Python Worker，线上数据保存在 Cloudflare D1。
 
-如需重新部署，先安装 Node.js 和 uv，再用 `uv run pywrangler login` 登录 Cloudflare。
+如需更新网页，在项目目录登录 Cloudflare 后执行：
 
-首次配置 D1 后，执行 `uv run pywrangler d1 migrations apply tongpin-hackathon-team-matcher-db --remote` 应用数据表，再执行 `uv run pywrangler secret put APP_SECRET_KEY` 设置随机会话密钥，最后执行 `uv run pywrangler deploy` 发布。每个 Cloudflare 账号的 D1 数据库 ID 不同，需在 `wrangler.jsonc` 中填入自己的 ID。
+```powershell
+npx wrangler pages deploy ./web --project-name=tongpin-team-matcher --config=pages.wrangler.jsonc
+```
+
+Pages 配置中的 `API` Service Binding 指向 `tongpin-hackathon-team-matcher` Worker。修改 Python 后端时，先按下方步骤更新 Worker；更新网页时发布 Pages 即可。首次配置 D1 后，执行 `uv run pywrangler d1 migrations apply tongpin-hackathon-team-matcher-db --remote` 应用数据表，再执行 `uv run pywrangler secret put APP_SECRET_KEY` 设置随机会话密钥，最后执行 `uv run pywrangler deploy` 发布 Worker。Node.js、uv 和 Cloudflare 登录信息需要预先配置。
+
+每个 Cloudflare 账号的 D1 数据库 ID 不同，需在 `wrangler.jsonc` 中填入自己的 ID。
 
 线上数据库与本机 SQLite 相互独立；部署不会上传本机用户资料或演示数据。
 
