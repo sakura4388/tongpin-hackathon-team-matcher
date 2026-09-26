@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 from flask import Flask, g, has_request_context, jsonify, request, send_from_directory, session
+from werkzeug.exceptions import HTTPException
 from passwords import hash_password, verify_password
 
 from matching import calculate
@@ -115,6 +116,17 @@ def init_db():
 
 def error(message, status=400):
     return jsonify({"error": message}), status
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    if not request.path.startswith("/api/"):
+        if isinstance(exc, HTTPException):
+            return exc.get_response()
+        raise exc
+    app.logger.exception("Unhandled API error for %s", request.path)
+    status = exc.code if isinstance(exc, HTTPException) else 500
+    return error("服务器处理请求失败，请稍后重试。", status)
 
 
 def body():
@@ -256,11 +268,24 @@ def register():
         return error("请输入昵称，并设置 8–128 位密码。")
     try:
         connection = db()
+    except sqlite3.IntegrityError:
+        return error("昵称已被使用，请换一个。", 409)
+    except Exception as exc:
+        app.logger.exception("Registration database setup failed")
+        return error(f"注册失败：数据库准备环节异常（{type(exc).__name__}）。", 500)
+    try:
         password_hash = hash_password(password, cloudflare=is_d1(connection))
+    except Exception as exc:
+        app.logger.exception("Registration password hashing failed")
+        return error("注册失败：密码加密环节异常，请稍后重试。", 500)
+    try:
         cursor = connection.execute("INSERT INTO users (nickname, password_hash) VALUES (?, ?)",
                                     (nickname, password_hash))
     except sqlite3.IntegrityError:
         return error("昵称已被使用，请换一个。", 409)
+    except Exception as exc:
+        app.logger.exception("Registration user insert failed")
+        return error(f"注册失败：数据库写入环节异常（{type(exc).__name__}）。", 500)
     session.clear()
     session["user_id"] = cursor.lastrowid
     session["csrf_token"] = secrets.token_hex(16)

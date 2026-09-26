@@ -16,7 +16,27 @@ async function api(path, method = "GET", data = null) {
     headers: { "Content-Type": "application/json", "X-CSRF-Token": state.csrfToken },
     body: data === null ? undefined : JSON.stringify(data)
   });
-  const result = await response.json();
+  const responseText = await response.text();
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    const readableBody = responseText
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 240);
+    const detail = readableBody ? `：${readableBody}` : "";
+    throw new Error(`服务器返回了非 JSON 响应（HTTP ${response.status}）${detail}`);
+  }
   if (!response.ok) throw new Error(result.error || "操作失败，请重试。");
   return result;
 }

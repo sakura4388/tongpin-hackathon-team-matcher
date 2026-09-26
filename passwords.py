@@ -5,7 +5,7 @@ import secrets
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
-WORKER_PBKDF2_ITERATIONS = 600_000
+WORKER_PBKDF2_ITERATIONS = 100_000
 
 
 def hash_password(password, *, cloudflare=False):
@@ -27,7 +27,7 @@ def verify_password(stored_hash, password, *, cloudflare=False):
         if algorithm != "pbkdf2" or digest != "sha256":
             return False
         iterations = int(iteration_count)
-        if not 100_000 <= iterations <= 2_000_000:
+        if not 100_000 <= iterations <= WORKER_PBKDF2_ITERATIONS:
             return False
         actual = _webcrypto_pbkdf2(password, bytes.fromhex(salt_hex), iterations)
         return secrets.compare_digest(actual.hex(), digest_hex)
@@ -43,13 +43,13 @@ def _random_salt():
 
 
 def _webcrypto_pbkdf2(password, salt, iterations):
-    from js import TextEncoder, Uint8Array, crypto
+    from js import Object, TextEncoder, Uint8Array, crypto
     from pyodide.ffi import run_sync, to_js
 
     key = run_sync(crypto.subtle.importKey(
         "raw",
         TextEncoder.new().encode(password),
-        to_js({"name": "PBKDF2"}),
+        to_js({"name": "PBKDF2"}, dict_converter=Object.fromEntries),
         False,
         to_js(["deriveBits"]),
     ))
@@ -61,6 +61,6 @@ def _webcrypto_pbkdf2(password, salt, iterations):
         "salt": salt_array,
         "iterations": iterations,
         "hash": "SHA-256",
-    })
+    }, dict_converter=Object.fromEntries)
     derived = run_sync(crypto.subtle.deriveBits(parameters, key, 256))
     return bytes(list(Uint8Array.new(derived)))

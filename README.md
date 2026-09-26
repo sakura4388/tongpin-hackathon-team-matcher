@@ -52,17 +52,19 @@ python app.py
 
 - 前端：原生 HTML、CSS、JavaScript，无前端构建工具。
 - 后端：Python、Flask，提供登录、名片、项目、申请、讨论和退出等 JSON 接口。
-- 数据：SQLite，保存用户、项目、申请、成员关系和文字消息。已有数据库启动时会自动建好新增的消息表。
-- 密码：Werkzeug 哈希，不保存明文密码。
+- 数据：本机使用 SQLite；线上使用 Cloudflare D1，保存用户、项目、申请、成员关系和文字消息。
+- 密码：本机由 Werkzeug 使用 PBKDF2-SHA256（600,000 次）哈希；线上 Worker 使用 Web Crypto PBKDF2-SHA256（100,000 次）和每个账号独立的随机盐，不保存明文密码。Cloudflare Worker 的 Web Crypto 将 PBKDF2 次数限制在 100,000，低于 OWASP 对 PBKDF2-SHA256 的 600,000 次建议；当前取运行环境可用的上限。若用于长期公开服务，应评估支持更高工作因子的密码哈希方案。
+
+浏览器通过项目自己的 JSON API 和服务端通信，而不是直接连接数据库。这样登录校验、用户权限和项目成员规则都由服务端执行，多位用户也能读写同一份持久化数据。主要接口包括 `GET /api/state`、`POST /api/register`、`POST /api/login`、`PUT /api/profile`，以及项目、申请和讨论消息接口。这里的 API 是本项目 Flask 应用提供的接口，不是 Google 或 GitHub 等第三方 API。
 
 ## Cloudflare 部署
 
-线上地址：[同频：黑客松组队空间](https://tongpin-team-matcher.pages.dev/)。网页由 Cloudflare Pages 提供；`web/_worker.js` 将 `/api/*` 请求通过 Service Binding 转给 Python Worker，并把原有 `/web/*` 静态资源路径映射到 Pages 文件。Flask 接口仍运行在 Cloudflare Python Worker，线上数据保存在 Cloudflare D1。
+线上地址：[同频：黑客松组队空间](https://tongpin-team-matcher.pages.dev/)。网页由 Cloudflare Pages 提供；`web/_worker.js` 将 `/api/*` 请求通过名为 `API` 的 Service Binding 转给 `tongpin-hackathon-team-matcher` Python Worker。Worker 通过 D1 绑定访问 Cloudflare D1；密码哈希使用 Worker 运行时提供的 Web Crypto API。以上是 Cloudflare 平台内部的服务绑定和运行时 API，不会把数据库凭证交给浏览器。
 
 如需更新网页，在项目目录登录 Cloudflare 后执行：
 
 ```powershell
-npx wrangler pages deploy ./web --project-name=tongpin-team-matcher --config=pages.wrangler.jsonc
+npx wrangler pages deploy ./web --project-name=tongpin-team-matcher
 ```
 
 Pages 配置中的 `API` Service Binding 指向 `tongpin-hackathon-team-matcher` Worker。修改 Python 后端时，先按下方步骤更新 Worker；更新网页时发布 Pages 即可。首次配置 D1 后，执行 `uv run pywrangler d1 migrations apply tongpin-hackathon-team-matcher-db --remote` 应用数据表，再执行 `uv run pywrangler secret put APP_SECRET_KEY` 设置随机会话密钥，最后执行 `uv run pywrangler deploy` 发布 Worker。Node.js、uv 和 Cloudflare 登录信息需要预先配置。
